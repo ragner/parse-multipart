@@ -24,23 +24,29 @@ exports.Parse = function(multipartBodyBuffer,boundary){
 		//	 part: 'AAAABBBB' }
 		// into this one:
 		// { filename: 'A.txt', type: 'text/plain', data: <Buffer 41 41 41 41 42 42 42 42> }
-		var obj = function(str){
+		var obj = function(o, str){
 			var k = str.split('=');
 			var a = k[0].trim();
 			var b = JSON.parse(k[1].trim());
-			var o = {};
 			Object.defineProperty( o , a , 
 			{ value: b, writable: true, enumerable: true, configurable: true })
-			return o;
 		}
-		var header = part.header.split(';');		
-		var file = obj(header[2]);
+
+		var newObj = {};
+
+		var header = part.header.split(';');
+
+		for(var h = 1; h < header.length; h++) {
+			obj(newObj, header[h]);
+		}
+
 		var contentType = part.info.split(':')[1].trim();		
-		Object.defineProperty( file , 'type' , 
+		Object.defineProperty( newObj , 'type',
 			{ value: contentType, writable: true, enumerable: true, configurable: true })
-		Object.defineProperty( file , 'data' , 
+		Object.defineProperty( newObj , 'data',
 			{ value: new Buffer(part.part), writable: true, enumerable: true, configurable: true })
-		return file;
+
+		return newObj;
 	}
 	var prev = null;
 	var lastline='';
@@ -69,13 +75,17 @@ exports.Parse = function(multipartBodyBuffer,boundary){
 			lastline='';
 		}else
 		if((2 == state) && newLineDetected){
-			info = lastline;
-			state=3;
+			if (lastline && lastline.toLowerCase().startsWith("content-type")) {
+				state=3;
+				info = lastline;
+			}
 			lastline='';
 		}else
 		if((3 == state) && newLineDetected){
-			state=4;
-			buffer=[];
+			if (!lastline) {
+				state=4;
+				buffer=[];
+			}
 			lastline='';
 		}else
 		if(4 == state){
